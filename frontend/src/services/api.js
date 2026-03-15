@@ -95,5 +95,10 @@ API.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
+API.interceptors.request.use((config) => {
+  console.log('🚀 FINAL URL:', config.baseURL + config.url);
+  console.log('🚀 METHOD:', config.method);
+  console.log('🚀 HEADERS:', config.headers);
+  return config;
+});
 export default API;
