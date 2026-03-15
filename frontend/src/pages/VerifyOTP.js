@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { verifyOTP } from '../services/api';
 
 const VerifyOTP = () => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -73,29 +74,20 @@ const VerifyOTP = () => {
       setLoading(true);
       setError('');
       
-      const response = await fetch('http://localhost:5000/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: otpString })
-      });
+      const response = await verifyOTP({ email, otp: otpString });
+      const data = response.data;
       
-      const data = await response.json();
+      login(data.token, data.user);
       
-      if (response.ok) {
-        login(data.token, data.user);
-        
-        if (data.user.role === 'club_admin') {
-          navigate('/club-admin');
-        } else if (data.user.role === 'super_admin') {
-          navigate('/super-admin');
-        } else {
-          navigate('/');
-        }
+      if (data.user.role === 'club_admin') {
+        navigate('/club-admin');
+      } else if (data.user.role === 'super_admin') {
+        navigate('/super-admin');
       } else {
-        setError(data.error || 'OTP verification failed');
+        navigate('/');
       }
     } catch (err) {
-      setError('Verification failed. Please try again.');
+      setError(err.response?.data?.error || 'OTP verification failed');
     } finally {
       setLoading(false);
     }
@@ -106,7 +98,10 @@ const VerifyOTP = () => {
       setLoading(true);
       setError('');
       
-      const response = await fetch('http://localhost:5000/api/auth/resend-otp', {
+      // You'll need to add resendOTP to your API service
+      // For now, let's use fetch with the env variable
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/auth/resend-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -254,6 +249,19 @@ const VerifyOTP = () => {
           {loading ? 'Verifying...' : 'Verify OTP'}
         </button>
       </form>
+      
+      {/* Debug footer */}
+      <div style={{ 
+        marginTop: '20px', 
+        padding: '10px', 
+        background: '#0B2838', 
+        borderRadius: '4px',
+        fontSize: '12px',
+        color: '#A0AEC0',
+        textAlign: 'center'
+      }}>
+        API: {process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/auth/verify-otp
+      </div>
     </div>
   );
 };

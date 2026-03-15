@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getEvent, registerForEvent } from '../services/api';
 
 function EventDetails() {
   const { id } = useParams();
@@ -7,6 +8,8 @@ function EventDetails() {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     fetchEvent();
@@ -14,16 +17,13 @@ function EventDetails() {
 
   const fetchEvent = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/events/${id}`, {
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-        },
-      });
-      const data = await response.json();
-      setEvent(data.event || data);
+      setLoading(true);
+      const response = await getEvent(id);
+      setEvent(response.data.event || response.data);
+      setError('');
     } catch (error) {
       console.error('Error fetching event:', error);
+      setError('Failed to load event details');
     } finally {
       setLoading(false);
     }
@@ -31,34 +31,46 @@ function EventDetails() {
 
   const handleRegister = async () => {
     setRegistering(true);
+    setError('');
+    setSuccess('');
+    
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/events/${id}/register`, {
-        method: 'POST',
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-          'Content-Type': 'application/json',
-        },
-      });
-      const data = await response.json();
-      alert(data.message || 'Registration successful!');
+      const response = await registerForEvent(id);
+      setSuccess(response.data.message || 'Registration successful!');
       fetchEvent(); // Refresh event data
     } catch (error) {
-      alert('Registration failed');
+      console.error('Registration error:', error);
+      setError(error.response?.data?.message || 'Registration failed');
     } finally {
       setRegistering(false);
     }
   };
 
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center' }}>Loading event details...</div>;
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '20px', color: '#DBA858' }}>Loading event details...</div>
+      </div>
+    );
   }
 
   if (!event) {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
-        <h3>Event not found</h3>
-        <button onClick={() => navigate('/events')}>Back to Events</button>
+        <h3 style={{ color: '#8C0E0F' }}>Event not found</h3>
+        <button 
+          onClick={() => navigate('/events')}
+          style={{ 
+            padding: '10px 20px', 
+            background: '#E89C31', 
+            color: '#031B28',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Back to Events
+        </button>
       </div>
     );
   }
@@ -72,19 +84,48 @@ function EventDetails() {
           background: '#6c757d', 
           color: 'white', 
           border: 'none',
-          marginBottom: '20px'
+          marginBottom: '20px',
+          borderRadius: '4px',
+          cursor: 'pointer'
         }}
       >
         ← Back to Events
       </button>
 
+      {error && (
+        <div style={{
+          padding: '12px',
+          marginBottom: '15px',
+          background: 'rgba(220, 53, 69, 0.2)',
+          color: '#f8d7da',
+          border: '1px solid #dc3545',
+          borderRadius: '4px'
+        }}>
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div style={{
+          padding: '12px',
+          marginBottom: '15px',
+          background: 'rgba(40, 167, 69, 0.2)',
+          color: '#d4edda',
+          border: '1px solid #28a745',
+          borderRadius: '4px'
+        }}>
+          {success}
+        </div>
+      )}
+
       <div style={{ 
-        background: 'white', 
+        background: 'linear-gradient(135deg, #0B2838 0%, #083248 100%)',
         padding: '30px', 
         borderRadius: '10px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        border: '1px solid #8C0E0F'
       }}>
-        <h1 style={{ marginTop: 0, color: '#343a40' }}>{event.title}</h1>
+        <h1 style={{ marginTop: 0, color: '#DBA858' }}>{event.title}</h1>
         
         <div style={{ 
           display: 'flex', 
@@ -93,49 +134,55 @@ function EventDetails() {
           flexWrap: 'wrap'
         }}>
           <div style={{ 
-            background: '#e7f5ff', 
+            background: '#031B28', 
             padding: '10px 15px', 
             borderRadius: '6px',
-            minWidth: '150px'
+            minWidth: '150px',
+            border: '1px solid #083248'
           }}>
-            <div style={{ color: '#0056b3', fontWeight: 'bold' }}>📅 Date</div>
-            <div>{new Date(event.date).toLocaleDateString('en-IN', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}</div>
+            <div style={{ color: '#E89C31', fontWeight: 'bold' }}>📅 Date</div>
+            <div style={{ color: '#A0AEC0' }}>
+              {new Date(event.date).toLocaleDateString('en-IN', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </div>
           </div>
 
           <div style={{ 
-            background: '#e7f5ff', 
+            background: '#031B28', 
             padding: '10px 15px', 
             borderRadius: '6px',
-            minWidth: '150px'
+            minWidth: '150px',
+            border: '1px solid #083248'
           }}>
-            <div style={{ color: '#0056b3', fontWeight: 'bold' }}>📍 Location</div>
-            <div>{event.location || 'To be announced'}</div>
+            <div style={{ color: '#E89C31', fontWeight: 'bold' }}>📍 Location</div>
+            <div style={{ color: '#A0AEC0' }}>{event.venue || event.location || 'To be announced'}</div>
           </div>
 
           <div style={{ 
-            background: '#e7f5ff', 
+            background: '#031B28', 
             padding: '10px 15px', 
             borderRadius: '6px',
-            minWidth: '150px'
+            minWidth: '150px',
+            border: '1px solid #083248'
           }}>
-            <div style={{ color: '#0056b3', fontWeight: 'bold' }}>🏷️ Category</div>
-            <div>{event.category || 'General'}</div>
+            <div style={{ color: '#E89C31', fontWeight: 'bold' }}>🏷️ Category</div>
+            <div style={{ color: '#A0AEC0' }}>{event.category || 'General'}</div>
           </div>
         </div>
 
         <div style={{ 
-          background: '#f8f9fa', 
+          background: '#031B28', 
           padding: '20px', 
           borderRadius: '8px',
-          margin: '20px 0'
+          margin: '20px 0',
+          border: '1px solid #083248'
         }}>
-          <h3 style={{ color: '#495057', marginTop: 0 }}>Description</h3>
-          <p style={{ lineHeight: '1.6', fontSize: '16px' }}>
+          <h3 style={{ color: '#DBA858', marginTop: 0 }}>Description</h3>
+          <p style={{ lineHeight: '1.6', fontSize: '16px', color: '#A0AEC0' }}>
             {event.description || 'No description available.'}
           </p>
         </div>
@@ -146,7 +193,7 @@ function EventDetails() {
           alignItems: 'center',
           marginTop: '30px',
           paddingTop: '20px',
-          borderTop: '1px solid #dee2e6'
+          borderTop: '1px solid #083248'
         }}>
           <div>
             <button 
@@ -154,48 +201,24 @@ function EventDetails() {
               disabled={registering}
               style={{ 
                 padding: '12px 25px', 
-                background: '#28a745', 
-                color: 'white', 
+                background: 'linear-gradient(135deg, #E89C31 0%, #DBA858 100%)',
+                color: '#031B28',
                 border: 'none',
                 borderRadius: '6px',
                 fontSize: '16px',
                 fontWeight: 'bold',
-                cursor: registering ? 'not-allowed' : 'pointer'
+                cursor: registering ? 'not-allowed' : 'pointer',
+                opacity: registering ? 0.5 : 1
               }}
             >
               {registering ? 'Registering...' : '📝 Register for Event'}
             </button>
           </div>
 
-          <div style={{ color: '#6c757d', fontSize: '14px' }}>
-            <p>Event ID: <code>{event._id || event.id}</code></p>
+          <div style={{ color: '#A0AEC0', fontSize: '14px' }}>
+            <p>Event ID: <code style={{ color: '#E89C31' }}>{event._id || event.id}</code></p>
+            <p>Capacity: {event.capacity || 'Unlimited'} | Registered: {event.registrationCount || 0}</p>
           </div>
-        </div>
-
-        <div style={{ 
-          marginTop: '30px', 
-          padding: '15px', 
-          background: '#fff3cd',
-          borderRadius: '8px',
-          fontSize: '14px',
-          color: '#856404'
-        }}>
-          <p><strong>Note:</strong> This is a demo. Registration endpoint might not exist yet.</p>
-          <button 
-            onClick={() => {
-              console.log('Event data:', event);
-              alert('Check console for event data');
-            }}
-            style={{ 
-              padding: '8px 15px', 
-              background: '#6c757d', 
-              color: 'white', 
-              border: 'none',
-              marginTop: '10px'
-            }}
-          >
-            Debug Event Data
-          </button>
         </div>
       </div>
     </div>

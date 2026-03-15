@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 // Create axios instance with auth token
 const api = axios.create({
@@ -145,21 +145,24 @@ const safeApiCall = async (apiCall, mockData = null, errorMessage = 'API request
 export const adminService = {
   // ========== SUPER ADMIN SPECIFIC APIs ==========
   
-  // Dashboard Stats
-  getSystemPulse: () => safeApiCall(
-    () => api.get('/admin/system-pulse'),
-    { success: true, ...mockDashboardData }
-  ),
+  // Dashboard Stats - FIXED URLs to match routes
+  getSystemPulse: () => api.get('/admin/analytics/pulse'),
 
-  getUserBehavior: () => safeApiCall(
-    () => api.get('/admin/user-behavior'),
-    { success: true, ...mockDashboardData.userBehavior }
-  ),
+  getUserBehavior: () => api.get('/admin/analytics/user-behavior'),
 
-  getClubPerformance: () => safeApiCall(
-    () => api.get('/admin/club-performance'),
-    { success: true, ...mockDashboardData.clubPerformance }
-  ),
+  getClubPerformance: () => api.get('/admin/analytics/club-performance'),
+
+  getEventIntelligence: () => api.get('/admin/analytics/event-intelligence'),
+
+  getRiskAlerts: () => api.get('/admin/analytics/risk-alerts'),
+
+  getApprovalMetrics: () => api.get('/admin/analytics/approval-metrics'),
+
+  getGrowthTrends: () => api.get('/admin/analytics/growth-trends'),
+
+  exportSystemReport: () => api.get('/admin/analytics/export/system-report', {
+    responseType: 'blob'
+  }),
 
   // User Management
   getAllUsers: (page = 1, limit = 10, search = '') => safeApiCall(
@@ -258,7 +261,7 @@ export const adminService = {
     }
   ),
 
-  // ========== DAY 3 APIs (KEEPING YOUR EXISTING CODE) ==========
+  // ========== DAY 3 APIs ==========
   
   // Profile Management
   updateProfile: (profileData) => api.put('/users/profile', profileData),

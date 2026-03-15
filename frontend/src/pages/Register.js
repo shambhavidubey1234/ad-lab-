@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { registerUser } from '../services/api';
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -49,15 +50,10 @@ function Register() {
         clubName: formData.role === 'club_admin' ? formData.clubName : undefined
       };
 
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
-      });
-
-      const data = await response.json();
+      const response = await registerUser(userData);
+      const data = response.data;
       
-      if (response.ok) {
+      if (response.status === 201 || response.status === 200) {
         setSuccess(`✅ ${data.message}`);
         
         // Redirect to OTP verification page
@@ -73,7 +69,7 @@ function Register() {
       }
     } catch (err) {
       console.error('Error:', err);
-      setError('❌ Cannot connect to server');
+      setError(err.response?.data?.error || '❌ Cannot connect to server');
     }
   };
 
@@ -241,6 +237,19 @@ function Register() {
       <p style={{ marginTop: '20px', color: '#A0AEC0', textAlign: 'center' }}>
         Already have an account? <a href="/login" style={{ color: '#E89C31' }}>Login here</a>
       </p>
+      
+      {/* Debug footer */}
+      <div style={{ 
+        marginTop: '20px', 
+        padding: '10px', 
+        background: '#0B2838', 
+        borderRadius: '4px',
+        fontSize: '12px',
+        color: '#A0AEC0',
+        textAlign: 'center'
+      }}>
+        API: {process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/auth/register
+      </div>
     </div>
   );
 }

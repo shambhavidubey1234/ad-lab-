@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { loginUser } from '../services/api';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -13,17 +14,10 @@ function Login() {
     e.preventDefault();
     
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await loginUser({ email, password });
+      const data = response.data;
       
-      const data = await response.json();
-      
-      if (response.ok) {
+      if (data.success) {
         login(data.token, data.user);
         
         setMessage('✅ Login successful! Redirecting...');
@@ -237,7 +231,7 @@ function Login() {
         textAlign: 'center'
       }}>
         <p style={{ margin: 0 }}>
-          🌐 Backend: http://localhost:5000
+          🌐 Backend: {process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}
         </p>
         <p style={{ margin: '0.3rem 0 0 0' }}>
           🔗 API Endpoint: /api/auth/login

@@ -68,6 +68,8 @@ const UserManagement = () => {
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
 
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -123,8 +125,8 @@ const UserManagement = () => {
           setError(err.response.data?.message || `Error ${err.response.status}: Failed to load users`);
         }
       } else if (err.request) {
-        // Request made but no response
-        setError('No response from server. Please check if backend is running on http://localhost:5000');
+        // ✅ FIXED: Use environment variable instead of hardcoded localhost
+        setError(`No response from server. Please check if backend is running at ${API_URL}`);
       } else {
         // Other errors
         setError(err.message || 'Failed to load users');
@@ -663,7 +665,8 @@ const UserManagement = () => {
       {/* Debug Info (remove in production) */}
       <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
         <Typography variant="caption" color="text.secondary">
-          Debug: Showing {users.length} of {totalUsers} users | Page {page + 1} | Search: "{searchTerm}"
+          Debug: Showing {users.length} of {totalUsers} users | Page {page + 1} | Search: "{searchTerm}" | 
+          API: {API_URL}
         </Typography>
       </Box>
     </Container>

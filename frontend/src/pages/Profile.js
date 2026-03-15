@@ -1,7 +1,6 @@
-// In Profile.js, replace the ENTIRE component with this:
-
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { getProfile } from "../services/api";
 
 function Profile() {
   const [profile, setProfile] = useState(null);
@@ -21,28 +20,21 @@ function Profile() {
   const loadProfile = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/users/profile', {
-        headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('token')
-        }
-      });
+      const response = await getProfile();
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          console.log("📥 Fresh data from API:", data.user);
-          setProfile(data.user);
-          
-          // Force update localStorage AND state
-          localStorage.setItem('user', JSON.stringify(data.user));
-          setUser(data.user);
-          
-          console.log("✅ Profile updated with:", {
-            collegeId: data.user.collegeId,
-            department: data.user.department,
-            year: data.user.year
-          });
-        }
+      if (response.data.success) {
+        console.log("📥 Fresh data from API:", response.data.user);
+        setProfile(response.data.user);
+        
+        // Force update localStorage AND state
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        setUser(response.data.user);
+        
+        console.log("✅ Profile updated with:", {
+          collegeId: response.data.user.collegeId,
+          department: response.data.user.department,
+          year: response.data.user.year
+        });
       }
     } catch (error) {
       console.error("Error loading profile:", error);
@@ -92,8 +84,6 @@ function Profile() {
       }}>
         👤 Your Profile
       </h1>
-      
-      
       
       <div style={{ 
         background: "linear-gradient(135deg, #0B2838 0%, #083248 100%)",
@@ -145,7 +135,7 @@ function Profile() {
           </div>
         </div>
         
-        {/* Profile Details - NOW SHOWING CORRECT DATA */}
+        {/* Profile Details */}
         <div style={{ marginBottom: "2rem" }}>
           <h3 style={{ color: "#E89C31", marginBottom: "1rem" }}>
             Profile Details
@@ -292,6 +282,9 @@ function Profile() {
         </p>
         <p style={{ fontSize: "0.8rem", marginTop: "0.3rem" }}>
           Click <strong>Edit Profile</strong> to update phone & bio
+        </p>
+        <p style={{ fontSize: "0.7rem", marginTop: "0.5rem", color: "#A0AEC0" }}>
+          API: {process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/users/profile
         </p>
       </div>
     </div>

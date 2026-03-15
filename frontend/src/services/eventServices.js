@@ -1,6 +1,8 @@
 // src/services/eventServices.js
 import API from './api'; // ✅ Import your axios instance
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
 // Get all events
 export const getEvents = async () => {
   try {
@@ -50,9 +52,10 @@ export const createEvent = async (eventData) => {
     } else if (error.request) {
       // Request was made but no response received
       console.error('No response from server:', error.request);
+      // ✅ FIXED: Use API_URL instead of hardcoded localhost
       return { 
         success: false, 
-        message: 'No response from server. Check if backend is running at http://localhost:5000' 
+        message: `No response from server. Check if backend is running at ${API_URL}` 
       };
     } else {
       // Something else happened
