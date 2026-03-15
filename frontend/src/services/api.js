@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -65,7 +65,6 @@ export const deleteClub = (id) => API.delete(`/admin/clubs/${id}`);
 export const assignClubAdmin = (id, userId) => API.post(`/admin/clubs/${id}/assign-admin`, { userId });
 export const updateClubPerformance = (id, performanceScore) => 
   API.put(`/admin/clubs/${id}/performance`, { performanceScore });
-// ✅ NEW: Update club status (activate/deactivate)
 export const updateClubStatus = (id, statusData) => 
   API.put(`/admin/clubs/${id}/status`, statusData);
 
