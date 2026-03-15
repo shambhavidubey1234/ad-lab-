@@ -12,6 +12,11 @@ router.post("/register", authController.registerUser);
 // @access  Public
 router.post("/verify-otp", authController.verifyOTP);
 
+// @route   POST /api/auth/resend-otp
+// @desc    Resend OTP
+// @access  Public
+router.post("/resend-otp", authController.resendOTP);
+
 // @route   POST /api/auth/login
 // @desc    Login user
 // @access  Public

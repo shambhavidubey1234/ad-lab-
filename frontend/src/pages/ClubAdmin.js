@@ -1,4 +1,4 @@
-// src/pages/ClubAdmin.js - FINAL FIXED VERSION
+// src/pages/ClubAdmin.js - FINAL VERSION WITH DEBUG LOGS
 import React, { useState, useEffect } from 'react';
 import { adminService } from '../services/adminService';
 import { 
@@ -38,8 +38,27 @@ const ClubAdmin = () => {
     fetchEvents();
   }, []);
 
+  // ✅ AUTO-REFRESH WHEN REGISTRATION UPDATED - WITH DEBUG LOGS
+  useEffect(() => {
+    console.log('✅ Setting up registration-updated listener in ClubAdmin');
+    
+    const handleRegistrationUpdate = () => {
+      console.log('🔄🔥 REFRESH EVENT RECEIVED IN CLUBADMIN! Fetching events...');
+      fetchEvents();
+    };
+    
+    window.addEventListener('registration-updated', handleRegistrationUpdate);
+    console.log('✅ Listener added successfully in ClubAdmin');
+    
+    return () => {
+      console.log('🧹 Cleaning up listener in ClubAdmin');
+      window.removeEventListener('registration-updated', handleRegistrationUpdate);
+    };
+  }, []);
+
   const fetchEvents = async () => {
     try {
+      console.log('📡 Fetching events from API...');
       setLoading(true);
       setError('');
       
@@ -63,16 +82,19 @@ const ClubAdmin = () => {
         }
       }
       
-      // Process events to ensure proper data
+      // Process events to use confirmedCount from backend
       const processedEvents = eventsArray.map(event => ({
         ...event,
-        registrationCount: event.registrationCount || event.registrations?.length || 0,
+        // Use confirmedCount from backend
+        registrationCount: event.confirmedCount || 0,
+        // Keep total registrations for reference
+        totalRegistrations: event.registrations?.length || 0,
         capacity: event.capacity || 50,
         status: event.status || 'draft',
         description: event.description || ''
       }));
       
-      console.log('Processed events:', processedEvents);
+      console.log('✅ Processed events with confirmedCount:', processedEvents);
       setEvents(processedEvents);
       
     } catch (err) {
@@ -96,7 +118,6 @@ const ClubAdmin = () => {
     // Format date for the modal
     const eventToEdit = { ...event };
     if (eventToEdit.date) {
-      // Ensure date is in YYYY-MM-DD format for date input
       const dateObj = new Date(eventToEdit.date);
       if (!isNaN(dateObj)) {
         eventToEdit.date = dateObj.toISOString().split('T')[0];
@@ -139,14 +160,27 @@ const ClubAdmin = () => {
     if (selectedEvent && selectedEvent._id) {
       // Update existing event
       setEvents(events.map(event => 
-        event._id === updatedEvent._id ? { ...updatedEvent, registrationCount: event.registrationCount } : event
+        event._id === updatedEvent._id 
+          ? { 
+              ...updatedEvent, 
+              registrationCount: event.registrationCount 
+            } 
+          : event
       ));
     } else {
-      // Add new event with default registration count
+      // Add new event
       setEvents([{ ...updatedEvent, registrationCount: 0 }, ...events]);
     }
     setShowEditModal(false);
     setSelectedEvent(null);
+  };
+
+  // Function to close modal and refresh
+  const closeModal = () => {
+    console.log('Closing modal, refreshing events...');
+    setShowRegistrations(false);
+    setCurrentEventId(null);
+    fetchEvents(); // Refresh when closing
   };
 
   const handleRetry = () => {
@@ -254,20 +288,36 @@ const ClubAdmin = () => {
             Manage your events and view registrations
           </p>
         </div>
-        <button
-          onClick={handleCreateEvent}
-          style={{
-            padding: '0.8rem 1.5rem',
-            background: 'linear-gradient(135deg, #E89C31 0%, #DBA858 100%)',
-            color: '#031B28',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          + Create New Event
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            onClick={fetchEvents}
+            style={{
+              padding: '0.8rem 1.5rem',
+              background: 'transparent',
+              color: '#DBA858',
+              border: '1px solid #DBA858',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            🔄 Refresh
+          </button>
+          <button
+            onClick={handleCreateEvent}
+            style={{
+              padding: '0.8rem 1.5rem',
+              background: 'linear-gradient(135deg, #E89C31 0%, #DBA858 100%)',
+              color: '#031B28',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            + Create New Event
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -300,7 +350,7 @@ const ClubAdmin = () => {
           <div style={{ fontSize: '2.5rem', color: '#DBA858', fontWeight: 'bold' }}>
             {events.reduce((total, event) => total + (event.registrationCount || 0), 0)}
           </div>
-          <div style={{ color: '#A0AEC0' }}>Total Registrations</div>
+          <div style={{ color: '#A0AEC0' }}>Confirmed Registrations</div>
         </div>
         
         <div style={{ 
@@ -396,7 +446,7 @@ const ClubAdmin = () => {
                       color: '#E89C31', 
                       fontWeight: '600'
                     }}>
-                      Registrations
+                      Confirmed / Capacity
                     </th>
                     <th style={{ 
                       padding: '1.2rem', 
@@ -485,6 +535,11 @@ const ClubAdmin = () => {
                               borderRadius: '4px'
                             }}></div>
                           </div>
+                          {event.totalRegistrations > event.registrationCount && (
+                            <div style={{ fontSize: '0.8rem', color: '#E89C31', marginTop: '0.3rem' }}>
+                              ⏳ {event.totalRegistrations - event.registrationCount} pending
+                            </div>
+                          )}
                         </div>
                         <div>
                           <ExportButton 
@@ -631,10 +686,7 @@ const ClubAdmin = () => {
             }}>
               <h3 style={{ color: '#DBA858', margin: 0 }}>Event Registrations</h3>
               <button
-                onClick={() => {
-                  setShowRegistrations(false);
-                  setCurrentEventId(null);
-                }}
+                onClick={closeModal}
                 style={{
                   background: 'transparent',
                   border: 'none',

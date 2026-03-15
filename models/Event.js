@@ -28,6 +28,11 @@ const EventSchema = new mongoose.Schema({
     min: 1,
     default: 50
   },
+  // ✅ ADDED: confirmedCount field to track confirmed registrations
+  confirmedCount: {
+    type: Number,
+    default: 0
+  },
   clubId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

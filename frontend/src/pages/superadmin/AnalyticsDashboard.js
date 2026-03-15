@@ -25,23 +25,43 @@ import {
   TrendingUp,
   People,
   Event,
-  Warning,
   Timeline,
   BarChart,
-  PieChart,
   Download,
   Refresh,
+  CalendarToday,
+  HowToReg,
 } from '@mui/icons-material';
 import {
   getSystemPulse,
   getUserBehavior,
   getClubPerformance,
-  getEventIntelligence,
-  getRiskAlerts,
-  getApprovalMetrics,
-  getGrowthTrends,
   exportSystemReport,
+  getAllClubs,
+  getAllEvents,
 } from '../../services/api';
+
+// Chart.js imports
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const AnalyticsDashboard = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -52,13 +72,27 @@ const AnalyticsDashboard = () => {
   const [systemPulse, setSystemPulse] = useState(null);
   const [userBehavior, setUserBehavior] = useState(null);
   const [clubPerformance, setClubPerformance] = useState(null);
-  const [eventIntelligence, setEventIntelligence] = useState(null);
-  const [riskAlerts, setRiskAlerts] = useState(null);
-  const [approvalMetrics, setApprovalMetrics] = useState(null);
-  const [growthTrends, setGrowthTrends] = useState(null);
+  
+  // Data states
+  const [clubs, setClubs] = useState([]);
+  const [events, setEvents] = useState([]);
 
   useEffect(() => {
     loadAnalyticsData();
+    
+    // Listen for updates from ClubManagement
+    const handleDataUpdate = () => {
+      console.log('🔄 Data updated, refreshing...');
+      loadAnalyticsData();
+    };
+
+    window.addEventListener('performance-updated', handleDataUpdate);
+    window.addEventListener('registration-updated', handleDataUpdate);
+    
+    return () => {
+      window.removeEventListener('performance-updated', handleDataUpdate);
+      window.removeEventListener('registration-updated', handleDataUpdate);
+    };
   }, []);
 
   const loadAnalyticsData = async () => {
@@ -66,32 +100,51 @@ const AnalyticsDashboard = () => {
       setLoading(true);
       setError('');
       
-      // Load all analytics data in parallel
+      // Load all data in parallel
       const [
         pulseRes,
         behaviorRes,
-        clubRes,
-        eventRes,
-        riskRes,
-        approvalRes,
-        growthRes,
+        clubPerfRes,
+        clubsRes,
+        eventsRes,
       ] = await Promise.allSettled([
         getSystemPulse(),
         getUserBehavior(),
         getClubPerformance(),
-        getEventIntelligence(),
-        getRiskAlerts(),
-        getApprovalMetrics(),
-        getGrowthTrends(),
+        getAllClubs({ limit: 100 }),
+        getAllEvents(),
       ]);
 
-      if (pulseRes.status === 'fulfilled') setSystemPulse(pulseRes.value.data);
-      if (behaviorRes.status === 'fulfilled') setUserBehavior(behaviorRes.value.data);
-      if (clubRes.status === 'fulfilled') setClubPerformance(clubRes.value.data);
-      if (eventRes.status === 'fulfilled') setEventIntelligence(eventRes.value.data);
-      if (riskRes.status === 'fulfilled') setRiskAlerts(riskRes.value.data);
-      if (approvalRes.status === 'fulfilled') setApprovalMetrics(approvalRes.value.data);
-      if (growthRes.status === 'fulfilled') setGrowthTrends(growthRes.value.data);
+      if (pulseRes.status === 'fulfilled') {
+        console.log('System Pulse Data:', pulseRes.value.data);
+        setSystemPulse(pulseRes.value.data);
+      }
+      
+      if (behaviorRes.status === 'fulfilled') {
+        console.log('User Behavior Data:', behaviorRes.value.data);
+        setUserBehavior(behaviorRes.value.data);
+      }
+      
+      if (clubPerfRes.status === 'fulfilled') {
+        console.log('Club Performance Data:', clubPerfRes.value.data);
+        setClubPerformance(clubPerfRes.value.data);
+      }
+
+      if (clubsRes.status === 'fulfilled') {
+        console.log('Clubs Data:', clubsRes.value.data);
+        setClubs(clubsRes.value.data.data || []);
+      }
+
+      if (eventsRes.status === 'fulfilled') {
+        console.log('Events Data:', eventsRes.value.data);
+        let eventsArray = [];
+        if (eventsRes.value.data?.events) {
+          eventsArray = eventsRes.value.data.events;
+        } else if (Array.isArray(eventsRes.value.data)) {
+          eventsArray = eventsRes.value.data;
+        }
+        setEvents(eventsArray);
+      }
 
     } catch (err) {
       setError('Failed to load analytics data');
@@ -104,7 +157,6 @@ const AnalyticsDashboard = () => {
   const handleExportReport = async () => {
     try {
       const response = await exportSystemReport();
-      // Create and download CSV
       const blob = new Blob([response.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -121,21 +173,73 @@ const AnalyticsDashboard = () => {
   };
 
   const getHealthColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'healthy': return 'success';
-      case 'warning': return 'warning';
-      case 'critical': return 'error';
+    switch (status?.toUpperCase()) {
+      case 'HEALTHY': return 'success';
+      case 'WARNING': return 'warning';
+      case 'CRITICAL': return 'error';
       default: return 'default';
     }
   };
 
-  const getSeverityColor = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'high': return 'error';
-      case 'medium': return 'warning';
-      case 'low': return 'info';
-      default: return 'default';
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
     }
+  };
+
+  // Prepare chart data for Event Intelligence - USING confirmedCount DIRECTLY
+  const getEventChartData = () => {
+    const topEvents = events
+      .map(event => ({
+        name: event.title || 'Untitled',
+        registrations: event.confirmedCount || 0, // Use confirmedCount directly
+        date: event.date,
+      }))
+      .sort((a, b) => b.registrations - a.registrations)
+      .slice(0, 10);
+
+    return {
+      labels: topEvents.map(e => e.name.length > 15 ? e.name.substring(0, 12) + '...' : e.name),
+      datasets: [
+        {
+          label: 'Confirmed Registrations',
+          data: topEvents.map(e => e.registrations),
+          backgroundColor: 'rgba(232, 156, 49, 0.8)',
+          borderColor: 'rgba(232, 156, 49, 1)',
+          borderWidth: 1,
+        },
+      ],
+    };
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      title: {
+        display: true,
+        text: 'Top Events by Confirmed Registrations',
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Number of Confirmed Registrations',
+        },
+      },
+    },
   };
 
   if (loading && !systemPulse) {
@@ -148,6 +252,24 @@ const AnalyticsDashboard = () => {
       </Container>
     );
   }
+
+  // Extract data from systemPulse
+  const totalUsers = systemPulse?.data?.stats?.totalUsers || 0;
+  const totalEvents = systemPulse?.data?.stats?.totalEvents || 0;
+  const activeEvents = systemPulse?.data?.stats?.activeEvents || 0;
+  const totalClubs = systemPulse?.data?.stats?.totalClubs || 0;
+  const eventApprovalRate = systemPulse?.data?.stats?.eventApprovalRate || 0;
+  const weeklyActiveUsers = systemPulse?.data?.stats?.weeklyActiveUsers || 0;
+  const systemHealth = systemPulse?.data?.systemHealth || 'UNKNOWN';
+
+  // Role distribution from userBehavior
+  const students = userBehavior?.data?.roleDistribution?.students || 0;
+  const clubAdmins = userBehavior?.data?.roleDistribution?.clubAdmins || 0;
+  const superAdmins = userBehavior?.data?.roleDistribution?.superAdmins || 0;
+  const totalUsersFromBehavior = userBehavior?.data?.roleDistribution?.total || totalUsers;
+
+  // Calculate total registrations using confirmedCount
+  const totalRegistrations = events.reduce((sum, event) => sum + (event.confirmedCount || 0), 0);
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -194,17 +316,14 @@ const AnalyticsDashboard = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TrendingUp sx={{ mr: 1, color: 'primary.main' }} />
-                <Typography variant="h6">System Health</Typography>
+                <People sx={{ mr: 1, color: 'primary.main' }} />
+                <Typography variant="h6">Total Users</Typography>
               </Box>
-              <Chip
-                label={systemPulse?.systemHealth?.status || 'Unknown'}
-                color={getHealthColor(systemPulse?.systemHealth?.status)}
-                sx={{ mb: 1 }}
-              />
+              <Typography variant="h3">
+                {totalUsers}
+              </Typography>
               <Typography variant="body2" color="text.secondary">
-                Last updated: {systemPulse?.lastUpdated ? 
-                  new Date(systemPulse.lastUpdated).toLocaleTimeString() : 'N/A'}
+                Registered Users
               </Typography>
             </CardContent>
           </Card>
@@ -214,14 +333,14 @@ const AnalyticsDashboard = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <People sx={{ mr: 1, color: 'success.main' }} />
-                <Typography variant="h6">Active Users</Typography>
+                <Event sx={{ mr: 1, color: 'success.main' }} />
+                <Typography variant="h6">Total Events</Typography>
               </Box>
               <Typography variant="h3">
-                {userBehavior?.dailyActiveUsers || 0}
+                {totalEvents}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Daily Active Users
+                {activeEvents} active events
               </Typography>
             </CardContent>
           </Card>
@@ -231,14 +350,14 @@ const AnalyticsDashboard = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Event sx={{ mr: 1, color: 'warning.main' }} />
-                <Typography variant="h6">Risk Alerts</Typography>
+                <TrendingUp sx={{ mr: 1, color: 'warning.main' }} />
+                <Typography variant="h6">Total Clubs</Typography>
               </Box>
               <Typography variant="h3">
-                {riskAlerts?.totalAlerts || 0}
+                {totalClubs}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {riskAlerts?.highPriorityAlerts || 0} high priority
+                Active Clubs
               </Typography>
             </CardContent>
           </Card>
@@ -249,20 +368,97 @@ const AnalyticsDashboard = () => {
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <Timeline sx={{ mr: 1, color: 'secondary.main' }} />
-                <Typography variant="h6">Approval Rate</Typography>
+                <Typography variant="h6">System Health</Typography>
               </Box>
-              <Typography variant="h3">
-                {approvalMetrics?.approvalRatio ? `${Math.round(approvalMetrics.approvalRatio)}%` : 'N/A'}
-              </Typography>
+              <Chip
+                label={systemHealth}
+                color={getHealthColor(systemHealth)}
+                sx={{ mb: 1, fontWeight: 'bold' }}
+              />
               <Typography variant="body2" color="text.secondary">
-                Event approval efficiency
+                Approval Rate: {eventApprovalRate}%
               </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Tabs for different analytics sections */}
+      {/* Role Distribution Card */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Role Distribution
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Students</Typography>
+                  <Typography fontWeight="bold">{students}</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={totalUsersFromBehavior ? (students / totalUsersFromBehavior) * 100 : 0} 
+                  sx={{ mb: 2, height: 8, borderRadius: 4 }} 
+                />
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Club Admins</Typography>
+                  <Typography fontWeight="bold">{clubAdmins}</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={totalUsersFromBehavior ? (clubAdmins / totalUsersFromBehavior) * 100 : 0} 
+                  sx={{ mb: 2, height: 8, borderRadius: 4 }} 
+                />
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Super Admins</Typography>
+                  <Typography fontWeight="bold">{superAdmins}</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={totalUsersFromBehavior ? (superAdmins / totalUsersFromBehavior) * 100 : 0} 
+                  sx={{ mb: 2, height: 8, borderRadius: 4 }} 
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Quick Stats
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Weekly Active Users</Typography>
+                  <Typography fontWeight="bold">{weeklyActiveUsers}</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={totalUsers ? (weeklyActiveUsers / totalUsers) * 100 : 0} 
+                  sx={{ mb: 2, height: 8, borderRadius: 4 }} 
+                />
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Event Approval Rate</Typography>
+                  <Typography fontWeight="bold">{eventApprovalRate}%</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={eventApprovalRate} 
+                  sx={{ mb: 2, height: 8, borderRadius: 4 }} 
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
         <Tabs
           value={activeTab}
@@ -275,15 +471,13 @@ const AnalyticsDashboard = () => {
           <Tab label="User Analytics" icon={<People />} iconPosition="start" />
           <Tab label="Club Performance" icon={<BarChart />} iconPosition="start" />
           <Tab label="Event Intelligence" icon={<Event />} iconPosition="start" />
-          <Tab label="Risk Monitoring" icon={<Warning />} iconPosition="start" />
-          <Tab label="Growth Trends" icon={<TrendingUp />} iconPosition="start" />
         </Tabs>
       </Paper>
 
-      {/* Tab Content */}
+      {/* User Analytics Tab */}
       {activeTab === 0 && userBehavior && (
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
                 User Behavior Metrics
@@ -293,263 +487,233 @@ const AnalyticsDashboard = () => {
                   <TableBody>
                     <TableRow>
                       <TableCell>Daily Active Users</TableCell>
-                      <TableCell align="right">{userBehavior.dailyActiveUsers || 0}</TableCell>
+                      <TableCell align="right">{userBehavior?.data?.dailyActiveUsers || 0}</TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell>Weekly Active Users</TableCell>
-                      <TableCell align="right">{userBehavior.weeklyActiveUsers || 0}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>User Retention Rate</TableCell>
-                      <TableCell align="right">
-                        {userBehavior.userRetentionRate ? `${userBehavior.userRetentionRate}%` : 'N/A'}
-                      </TableCell>
+                      <TableCell align="right">{userBehavior?.data?.weeklyActiveUsers || 0}</TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell>New Users (30 days)</TableCell>
-                      <TableCell align="right">{userBehavior.newUsers || 0}</TableCell>
+                      <TableCell align="right">{userBehavior?.data?.newUsers || 0}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>Returning Users</TableCell>
+                      <TableCell align="right">{userBehavior?.data?.returningUsers || 0}</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
               </TableContainer>
             </Paper>
           </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Role Distribution
-              </Typography>
-              {userBehavior.roleDistribution && Object.entries(userBehavior.roleDistribution).map(([role, count]) => (
-                <Box key={role} sx={{ mb: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="body2">
-                      {role.charAt(0).toUpperCase() + role.slice(1)}
-                    </Typography>
-                    <Typography variant="body2">{count}</Typography>
-                  </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(count / Object.values(userBehavior.roleDistribution).reduce((a, b) => a + b, 0)) * 100}
-                  />
-                </Box>
-              ))}
-            </Paper>
-          </Grid>
         </Grid>
       )}
 
-      {activeTab === 1 && clubPerformance && (
+      {/* Club Performance Tab */}
+      {activeTab === 1 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Top Performing Clubs
-              </Typography>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Rank</TableCell>
-                      <TableCell>Club Name</TableCell>
-                      <TableCell>Performance Score</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell>Total Events</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {clubPerformance.topPerformingClubs?.slice(0, 10).map((club, index) => (
-                      <TableRow key={club._id || index}>
-                        <TableCell>
-                          <Chip label={`#${index + 1}`} size="small" />
-                        </TableCell>
-                        <TableCell>{club.name}</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: '100px' }}>
-                              <LinearProgress 
-                                variant="determinate" 
-                                value={club.performanceScore || 0}
-                              />
-                            </Box>
-                            <Typography variant="body2">{club.performanceScore || 0}</Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={club.category} size="small" />
-                        </TableCell>
-                        <TableCell>{club.totalEvents || 0}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={club.isActive ? 'Active' : 'Inactive'} 
-                            color={club.isActive ? 'success' : 'error'}
-                            size="small"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
-          </Grid>
-        </Grid>
-      )}
-
-      {activeTab === 2 && eventIntelligence && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Event Creation Stats
-              </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>Total Events Created</TableCell>
-                      <TableCell align="right">{eventIntelligence.creationStats?.totalEvents || 0}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Events This Month</TableCell>
-                      <TableCell align="right">{eventIntelligence.creationStats?.thisMonth || 0}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Avg Approval Time</TableCell>
-                      <TableCell align="right">
-                        {eventIntelligence.timeMetrics?.avgApprovalTime ? 
-                          `${eventIntelligence.timeMetrics.avgApprovalTime} hours` : 'N/A'}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Popular Categories
-              </Typography>
-              {eventIntelligence.categories?.slice(0, 5).map((category, index) => (
-                <Box key={index} sx={{ mb: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="body2">{category.name}</Typography>
-                    <Typography variant="body2">{category.count} events</Typography>
-                  </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={(category.count / eventIntelligence.categories.reduce((a, b) => a + b.count, 0)) * 100}
-                  />
-                </Box>
-              ))}
-            </Paper>
-          </Grid>
-        </Grid>
-      )}
-
-      {activeTab === 3 && riskAlerts && (
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Risk Alerts ({riskAlerts.totalAlerts || 0})
-              </Typography>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Severity</TableCell>
-                      <TableCell>Alert Type</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Timestamp</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {riskAlerts.alerts?.slice(0, 10).map((alert, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <Chip 
-                            label={alert.severity} 
-                            color={getSeverityColor(alert.severity)}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{alert.type}</TableCell>
-                        <TableCell>{alert.description}</TableCell>
-                        <TableCell>
-                          {new Date(alert.timestamp).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={alert.resolved ? 'Resolved' : 'Active'} 
-                            color={alert.resolved ? 'success' : 'error'}
-                            size="small"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
-          </Grid>
-        </Grid>
-      )}
-
-      {activeTab === 4 && growthTrends && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Growth Insights
-              </Typography>
-              {growthTrends.insights?.map((insight, index) => (
-                <Alert 
-                  key={index}
-                  severity="info" 
-                  sx={{ mb: 1 }}
-                  icon={<TrendingUp />}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  Club Performance
+                </Typography>
+                <Button
+                  size="small"
+                  startIcon={<Refresh />}
+                  onClick={loadAnalyticsData}
                 >
-                  {insight}
-                </Alert>
-              ))}
+                  Refresh Data
+                </Button>
+              </Box>
+              
+              {clubs.length > 0 ? (
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Rank</TableCell>
+                        <TableCell>Club Name</TableCell>
+                        <TableCell>Performance Score</TableCell>
+                        <TableCell>Category</TableCell>
+                        <TableCell>Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {clubs
+                        .sort((a, b) => (b.performanceScore || 0) - (a.performanceScore || 0))
+                        .map((club, index) => {
+                          const performanceScore = club.performanceScore || 0;
+                          
+                          return (
+                            <TableRow key={club._id || index}>
+                              <TableCell>
+                                <Chip 
+                                  label={`#${index + 1}`} 
+                                  size="small" 
+                                  color={index === 0 ? 'success' : index === 1 ? 'primary' : 'default'}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Typography fontWeight="medium">{club.name}</Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box sx={{ width: 100 }}>
+                                    <LinearProgress 
+                                      variant="determinate" 
+                                      value={performanceScore} 
+                                      color={performanceScore >= 80 ? 'success' : performanceScore >= 60 ? 'primary' : 'warning'}
+                                    />
+                                  </Box>
+                                  <Typography fontWeight="bold">{performanceScore}</Typography>
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Chip 
+                                  label={club.category || 'General'} 
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Chip 
+                                  label={club.isActive ? 'Active' : 'Inactive'} 
+                                  color={club.isActive ? 'success' : 'error'}
+                                  size="small"
+                                />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Typography>No club performance data available</Typography>
+              )}
             </Paper>
           </Grid>
+        </Grid>
+      )}
+
+      {/* Event Intelligence Tab - USING confirmedCount DIRECTLY */}
+      {activeTab === 2 && (
+        <Grid container spacing={3}>
+          {/* Summary Cards */}
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Event sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="h6">Total Events</Typography>
+                </Box>
+                <Typography variant="h3">{events.length}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
           
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <HowToReg sx={{ mr: 1, color: 'success.main' }} />
+                  <Typography variant="h6">Confirmed Registrations</Typography>
+                </Box>
+                <Typography variant="h3">{totalRegistrations}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <CalendarToday sx={{ mr: 1, color: 'warning.main' }} />
+                  <Typography variant="h6">Avg per Event</Typography>
+                </Box>
+                <Typography variant="h3">
+                  {events.length > 0 ? Math.round(totalRegistrations / events.length) : 0}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Bar Chart */}
+          <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
-                Semester Trends
+                Event Registration Trends
+              </Typography>
+              <Box sx={{ height: 400 }}>
+                {events.length > 0 ? (
+                  <Bar data={getEventChartData()} options={chartOptions} />
+                ) : (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                    <Typography color="text.secondary">No event data available</Typography>
+                  </Box>
+                )}
+              </Box>
+            </Paper>
+          </Grid>
+
+          {/* Event Details Table */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Event Details
               </Typography>
               <TableContainer>
-                <Table size="small">
+                <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Semester</TableCell>
-                      <TableCell align="right">Events</TableCell>
-                      <TableCell align="right">Registrations</TableCell>
-                      <TableCell align="right">Growth</TableCell>
+                      <TableCell>Event Name</TableCell>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Confirmed Registrations</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Category</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {growthTrends.semesterTrends?.map((trend, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{trend.semester}</TableCell>
-                        <TableCell align="right">{trend.events}</TableCell>
-                        <TableCell align="right">{trend.registrations}</TableCell>
-                        <TableCell align="right">
-                          <Chip 
-                            label={`${trend.growth > 0 ? '+' : ''}${trend.growth}%`}
-                            color={trend.growth > 0 ? 'success' : 'error'}
-                            size="small"
-                          />
+                    {events.length > 0 ? (
+                      events
+                        .sort((a, b) => (b.confirmedCount || 0) - (a.confirmedCount || 0))
+                        .map((event) => (
+                          <TableRow key={event._id} hover>
+                            <TableCell>
+                              <Typography fontWeight="medium">{event.title || 'Untitled'}</Typography>
+                            </TableCell>
+                            <TableCell>{formatDate(event.date)}</TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={event.confirmedCount || 0} 
+                                size="small"
+                                color={event.confirmedCount > 50 ? 'success' : event.confirmedCount > 20 ? 'primary' : 'default'}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={event.status || 'published'} 
+                                size="small"
+                                color={event.status === 'published' ? 'success' : 'warning'}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={event.category || 'General'} 
+                                size="small"
+                                variant="outlined"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center">
+                          <Typography color="text.secondary">No events found</Typography>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -561,7 +725,7 @@ const AnalyticsDashboard = () => {
       {/* Last Updated */}
       <Box sx={{ mt: 4, textAlign: 'center' }}>
         <Typography variant="caption" color="text.secondary">
-          Analytics last updated: {new Date().toLocaleString()}
+          Data from API • Last updated: {new Date().toLocaleString()}
         </Typography>
       </Box>
     </Container>

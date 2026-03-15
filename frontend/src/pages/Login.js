@@ -24,13 +24,29 @@ function Login() {
       const data = await response.json();
       
       if (response.ok) {
-        // Use AuthContext login function
         login(data.token, data.user);
         
         setMessage('✅ Login successful! Redirecting...');
-        setTimeout(() => navigate('/'), 1500); // Redirect to HOME
+        
+        setTimeout(() => {
+          if (data.user.role === 'club_admin') {
+            navigate('/club-admin');
+          } else if (data.user.role === 'super_admin') {
+            navigate('/super-admin');
+          } else {
+            navigate('/');
+          }
+        }, 1500);
       } else {
-        setMessage(`❌ ${data.message || 'Login failed'}`);
+        // Check if email needs verification
+        if (data.needsVerification) {
+          setMessage('❌ Please verify your email first');
+          setTimeout(() => {
+            navigate('/verify-otp', { state: { email: data.email } });
+          }, 2000);
+        } else {
+          setMessage(`❌ ${data.error || 'Login failed'}`);
+        }
       }
     } catch (error) {
       console.error('Login error:', error);

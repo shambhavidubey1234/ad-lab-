@@ -1,5 +1,6 @@
 const User = require("../models/user");
 const jwt = require("jsonwebtoken");
+const { sendOTPEmail } = require('../utils/emailService');
 
 // Generate JWT Token with ALL user data
 const generateToken = (user) => {
@@ -48,12 +49,17 @@ exports.registerUser = async (req, res) => {
     const otp = user.generateOTP();
     await user.save();
 
-    console.log(`OTP for ${email}: ${otp}`);
+    // Send OTP via email
+    try {
+      await sendOTPEmail(email, otp);
+      console.log(`✅ OTP email sent to ${email}`);
+    } catch (emailError) {
+      console.error('❌ Failed to send email:', emailError);
+    }
 
     res.status(201).json({
       message: "User registered. OTP sent to email.",
       userId: user._id,
-      otp: otp,
       email: user.email
     });
 
@@ -98,8 +104,43 @@ exports.verifyOTP = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        emailVerified: true,
         collegeId: user.collegeId
       }
+    });
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// @desc    Resend OTP
+// @route   POST /api/auth/resend-otp
+// @access  Public
+exports.resendOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    // Generate new OTP
+    const otp = user.generateOTP();
+    await user.save();
+    
+    // Send new OTP via email
+    try {
+      await sendOTPEmail(email, otp);
+      console.log(`✅ New OTP sent to ${email}`);
+    } catch (emailError) {
+      console.error('❌ Failed to send email:', emailError);
+    }
+    
+    res.json({
+      message: "New OTP sent successfully"
     });
     
   } catch (error) {
@@ -142,6 +183,16 @@ exports.loginUser = async (req, res) => {
       return res.status(401).json({ 
         success: false,
         error: "Invalid credentials" 
+      });
+    }
+    
+    // Check if email is verified
+    if (!user.emailVerified) {
+      return res.status(401).json({ 
+        success: false,
+        error: "Please verify your email first",
+        needsVerification: true,
+        email: user.email
       });
     }
     

@@ -43,7 +43,9 @@ export const getEventIntelligence = () => API.get('/admin/analytics/event-intell
 export const getRiskAlerts = () => API.get('/admin/analytics/risk-alerts');
 export const getApprovalMetrics = () => API.get('/admin/analytics/approval-metrics');
 export const getGrowthTrends = () => API.get('/admin/analytics/growth-trends');
-export const exportSystemReport = () => API.get('/admin/analytics/export/system-report');
+export const exportSystemReport = () => API.get('/admin/analytics/export/system-report', {
+  responseType: 'blob'
+});
 
 // ============ SUPER ADMIN USER MANAGEMENT ============
 export const getAllUsers = (params = {}) => API.get('/admin/users', { params });
@@ -63,6 +65,9 @@ export const deleteClub = (id) => API.delete(`/admin/clubs/${id}`);
 export const assignClubAdmin = (id, userId) => API.post(`/admin/clubs/${id}/assign-admin`, { userId });
 export const updateClubPerformance = (id, performanceScore) => 
   API.put(`/admin/clubs/${id}/performance`, { performanceScore });
+// ✅ NEW: Update club status (activate/deactivate)
+export const updateClubStatus = (id, statusData) => 
+  API.put(`/admin/clubs/${id}/status`, statusData);
 
 // ============ SUPER ADMIN BULK OPERATIONS ============
 export const bulkImportUsers = (users) => API.post('/admin/bulk/users', { users });

@@ -53,6 +53,7 @@ router.get('/', async (req, res) => {
       president: admin.name,
       presidentEmail: admin.email,
       performanceScore: admin.performanceScore || 0,
+      isActive: admin.userStatus === 'ACTIVE',
       status: admin.userStatus || 'ACTIVE',
       memberCount: 1, // Default since clubs are based on individual users
       eventCount: 0,
@@ -114,6 +115,7 @@ router.get('/:id', async (req, res) => {
         president: user.name,
         presidentEmail: user.email,
         performanceScore: user.performanceScore || 0,
+        isActive: user.userStatus === 'ACTIVE',
         status: user.userStatus,
         contact: {
           phone: user.phone,
@@ -181,6 +183,7 @@ router.post('/', async (req, res) => {
     president.role = 'club_admin';
     president.clubName = clubName.trim();
     president.clubDescription = description || '';
+    president.userStatus = 'ACTIVE';
     await president.save();
 
     console.log(`✅ Club created in database: ${clubName}`);
@@ -197,6 +200,7 @@ router.post('/', async (req, res) => {
           name: president.name,
           email: president.email
         },
+        isActive: true,
         status: president.userStatus,
         createdAt: president.createdAt
       }
@@ -271,6 +275,7 @@ router.put('/:id', async (req, res) => {
           name: user.name,
           email: user.email
         },
+        isActive: user.userStatus === 'ACTIVE',
         status: user.userStatus
       }
     });
@@ -313,6 +318,7 @@ router.delete('/:id', async (req, res) => {
     user.clubName = undefined;
     user.clubDescription = undefined;
     user.role = 'student'; // Downgrade to student
+    user.userStatus = 'ACTIVE'; // Reset status
     await user.save();
 
     console.log(`✅ Club deleted from database: ${clubName}`);
@@ -374,6 +380,7 @@ router.post('/:id/assign-admin', async (req, res) => {
     newAdmin.role = 'club_admin';
     newAdmin.clubName = clubUser.clubName;
     newAdmin.clubDescription = clubUser.clubDescription;
+    newAdmin.userStatus = 'ACTIVE';
     await newAdmin.save();
 
     console.log(`✅ Club admin assigned in database`);
@@ -386,7 +393,8 @@ router.post('/:id/assign-admin', async (req, res) => {
         newAdmin: {
           _id: newAdmin._id,
           name: newAdmin.name,
-          email: newAdmin.email
+          email: newAdmin.email,
+          isActive: true
         }
       }
     });
@@ -441,11 +449,61 @@ router.put('/:id/performance', async (req, res) => {
       data: {
         _id: user._id,
         name: user.clubName,
-        performanceScore: user.performanceScore
+        performanceScore: user.performanceScore,
+        isActive: user.userStatus === 'ACTIVE'
       }
     });
   } catch (error) {
     console.error('❌ Error updating performance score:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// ============ 8. UPDATE CLUB STATUS (ACTIVATE/DEACTIVATE) - FIXED ============
+router.put('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid club ID' 
+      });
+    }
+
+    // REAL DATABASE QUERY
+    const user = await User.findById(id);
+    if (!user || !user.clubName) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Club not found in database' 
+      });
+    }
+
+    console.log(`🔄 ${isActive ? 'Activating' : 'Deactivating'} club: ${user.clubName}`);
+
+    // Update user status
+    user.userStatus = isActive ? 'ACTIVE' : 'INACTIVE';
+    await user.save();
+
+    console.log(`✅ Club ${isActive ? 'activated' : 'deactivated'} in database`);
+
+    res.json({ 
+      success: true, 
+      message: `Club ${isActive ? 'activated' : 'deactivated'} successfully`,
+      data: {
+        _id: user._id,
+        name: user.clubName,
+        isActive: user.userStatus === 'ACTIVE',
+        status: user.userStatus
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error updating club status:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 

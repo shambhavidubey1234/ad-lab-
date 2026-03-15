@@ -9,6 +9,7 @@ import Profile from './pages/Profile';
 import EventDetails from './pages/EventDetails';
 import ClubAdmin from './pages/ClubAdmin';
 import ProfileEdit from './pages/ProfileEdit';
+import VerifyOTP from './pages/VerifyOTP';
 
 // Super Admin Pages
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
@@ -315,6 +316,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/verify-otp" element={<VerifyOTP />} />
             
             {/* Protected Routes */}
             <Route path="/events" element={

@@ -23,9 +23,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
   Grid,
   Card,
   CardContent,
@@ -33,20 +30,24 @@ import {
 } from '@mui/material';
 import {
   Search,
-  FilterList,
   MoreVert,
-  Edit,
   Delete,
   School,
   PersonAdd,
   Refresh,
-  Download,
   Add,
   TrendingUp,
   People,
   Event,
+  ToggleOn,
+  ToggleOff,
 } from '@mui/icons-material';
-import { getAllClubs, deleteClub, updateClubPerformance } from '../../services/api';
+import { 
+  getAllClubs, 
+  deleteClub, 
+  updateClubPerformance, 
+  updateClubStatus 
+} from '../../services/api';
 
 const ClubManagement = () => {
   const [clubs, setClubs] = useState([]);
@@ -65,11 +66,11 @@ const ClubManagement = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [performanceDialogOpen, setPerformanceDialogOpen] = useState(false);
   const [newPerformanceScore, setNewPerformanceScore] = useState(0);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchClubs();
-  }, [page, rowsPerPage]);
+  }, [page, rowsPerPage, searchTerm]);
 
   const fetchClubs = async () => {
     try {
@@ -116,6 +117,24 @@ const ClubManagement = () => {
       setPerformanceDialogOpen(false);
     } catch (err) {
       setError('Failed to update performance score');
+    }
+  };
+
+  // ✅ NEW: Toggle club status
+  const handleToggleStatus = async () => {
+    try {
+      const newStatus = !selectedClub.isActive;
+      await updateClubStatus(selectedClub._id, { isActive: newStatus });
+      
+      // Update local state
+      setClubs(clubs.map(club => 
+        club._id === selectedClub._id ? { ...club, isActive: newStatus } : club
+      ));
+      
+      setStatusDialogOpen(false);
+      alert(`Club ${newStatus ? 'activated' : 'deactivated'} successfully!`);
+    } catch (err) {
+      setError('Failed to update club status');
     }
   };
 
@@ -260,7 +279,7 @@ const ClubManagement = () => {
 
       {/* Toolbar */}
       <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '10px' }}>
             <TextField
               size="small"
@@ -329,7 +348,7 @@ const ClubManagement = () => {
                       <Box>
                         <Typography variant="body2">{club.name}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {club.email}
+                          {club.presidentEmail}
                         </Typography>
                       </Box>
                     </Box>
@@ -342,11 +361,11 @@ const ClubManagement = () => {
                     />
                   </TableCell>
                   <TableCell>
-                    {club.president?.name || 'Not assigned'}
+                    {club.president || 'Not assigned'}
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box sx={{ width: '100%', mr: 1 }}>
+                      <Box sx={{ width: '100px', mr: 1 }}>
                         <LinearProgress 
                           variant="determinate" 
                           value={club.performanceScore || 0}
@@ -358,8 +377,8 @@ const ClubManagement = () => {
                       </Typography>
                     </Box>
                   </TableCell>
-                  <TableCell>{club.totalMembers || 0}</TableCell>
-                  <TableCell>{club.totalEvents || 0}</TableCell>
+                  <TableCell>{club.memberCount || 1}</TableCell>
+                  <TableCell>{club.eventCount || 0}</TableCell>
                   <TableCell>
                     <Chip
                       label={club.isActive ? 'Active' : 'Inactive'}
@@ -368,12 +387,28 @@ const ClubManagement = () => {
                     />
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={(e) => handleMenuClick(e, club)}
-                    >
-                      <MoreVert />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                      {/* ✅ NEW: Activate/Deactivate Button */}
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color={club.isActive ? 'error' : 'success'}
+                        onClick={() => {
+                          setSelectedClub(club);
+                          setStatusDialogOpen(true);
+                        }}
+                        startIcon={club.isActive ? <ToggleOff /> : <ToggleOn />}
+                      >
+                        {club.isActive ? 'Deactivate' : 'Activate'}
+                      </Button>
+                      
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleMenuClick(e, club)}
+                      >
+                        <MoreVert />
+                      </IconButton>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))
@@ -452,6 +487,34 @@ const ClubManagement = () => {
         </DialogActions>
       </Dialog>
 
+      {/* ✅ NEW: Toggle Status Dialog */}
+      <Dialog open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)}>
+        <DialogTitle>
+          {selectedClub?.isActive ? 'Deactivate' : 'Activate'} Club
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Are you sure you want to {selectedClub?.isActive ? 'deactivate' : 'activate'} 
+            {' '}{selectedClub?.name}?
+          </Typography>
+          <Alert severity={selectedClub?.isActive ? 'warning' : 'info'} sx={{ mt: 2 }}>
+            {selectedClub?.isActive 
+              ? 'Deactivating will make the club inactive. Members cannot create events under this club.'
+              : 'Activating will allow the club to create events and be visible to students.'}
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={handleToggleStatus} 
+            variant="contained" 
+            color={selectedClub?.isActive ? 'error' : 'success'}
+          >
+            {selectedClub?.isActive ? 'Deactivate' : 'Activate'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <DialogTitle>Delete Club</DialogTitle>
@@ -475,4 +538,4 @@ const ClubManagement = () => {
   );
 };
 
-export default ClubManagement;
+export default ClubManagement; 
